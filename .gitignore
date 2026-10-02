@@ -1,0 +1,13 @@
+.env
+**/target/
+**/node_modules/
+**/.next/
+.tools/
+.runtime/
+**/__pycache__/
+**/.pio/
+*.log
+*.tsbuildinfo
+**/test-results/
+**/playwright-report/
+firmware/parking_config.h

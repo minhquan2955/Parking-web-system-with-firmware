@@ -1,0 +1,10 @@
+{
+  "environment": "Windows / Java 21 / PostgreSQL embedded / Next production / loopback HTTP, not physical LAN",
+  "scanCount": 100,
+  "p50Ms": 32.14,
+  "p95Ms": 38.0,
+  "maxMs": 40.15,
+  "mockPaymentRoundTripMs": 56.09,
+  "meetsLocalScanTarget": true,
+  "meetsLocalPaymentTarget": true
+}
