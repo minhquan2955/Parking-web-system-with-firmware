@@ -1035,6 +1035,15 @@ function CreateCard({ onDone }: { onDone: () => void }) {
     </Form>
   );
 }
+function newIdempotencyKey() {
+  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
 function CardDetail({ id }: { id: string }) {
   const c = useResource<Row>("/cards/" + id),
     p = useResource<Row[]>("/renewal-packages");
@@ -1083,8 +1092,8 @@ function CardDetail({ id }: { id: string }) {
                   onClick={async () => {
                     setBusy(true);
                     setError(null);
-                    keys.current[pack.id] ??= crypto.randomUUID();
                     try {
+                      keys.current[pack.id] ??= newIdempotencyKey();
                       const o = await mutate(
                         "/cards/" + id + "/renewal-orders",
                         { packageId: pack.id },
@@ -1185,7 +1194,7 @@ function Payment({ id, admin }: { id: string; admin: boolean }) {
     }
     setQr("");
     let live = true;
-    if (o?.qrPayload && o.paymentMode !== "mock")
+    if (o?.qrPayload)
       QRCode.toDataURL(o.qrPayload, { width: 280, margin: 2 }).then((q) => {
         if (live) setQr(q);
       });
@@ -1200,13 +1209,15 @@ function Payment({ id, admin }: { id: string; admin: boolean }) {
   const remaining = o
     ? Math.max(0, Math.floor((new Date(o.expiresAt).getTime() - now) / 1000))
     : 0;
-  async function action(body: Row, simulate = false) {
+  async function action(body: Row, simulate = false, ownerSimulation = false) {
     setBusy(true);
     setError(null);
     try {
       await mutate(
         simulate
-          ? "/admin/dev/renewal-orders/" + id + "/simulate-payment"
+          ? (ownerSimulation ? "/renewal-orders/" : "/admin/dev/renewal-orders/") +
+              id +
+              "/simulate-payment"
           : "/renewal-orders/" + id + "/reconcile",
         body,
       );
@@ -1247,15 +1258,7 @@ function Payment({ id, admin }: { id: string; admin: boolean }) {
             ) : o.status === "PENDING" && remaining > 0 ? (
               <>
                 <h2>{money(o.amountVnd)}</h2>
-                {o.paymentMode === "mock" ? (
-                  <div className="mock-qr">
-                    <Icon name="card" />
-                    <strong>Đơn mô phỏng</strong>
-                    <p>
-                      Quản trị viên có thể chạy kịch bản kiểm thử cho đơn này.
-                    </p>
-                  </div>
-                ) : qr ? (
+                {qr ? (
                   <img
                     className="qr-image"
                     src={qr}
@@ -1265,6 +1268,29 @@ function Payment({ id, admin }: { id: string; admin: boolean }) {
                   />
                 ) : (
                   <p>Đang chuẩn bị mã QR…</p>
+                )}
+                {o.paymentMode === "mock" && (
+                  <>
+                    <p className="mock-payment-note">
+                      QR mô phỏng, không dùng để chuyển tiền. Chọn kết quả thanh toán bên dưới.
+                    </p>
+                    <div className="dev-actions mock-payment-actions">
+                      <button
+                        disabled={busy}
+                        className="button primary"
+                        onClick={() => action({ scenario: "SUCCESS" }, true, true)}
+                      >
+                        Xác nhận thanh toán thành công
+                      </button>
+                      <button
+                        disabled={busy}
+                        className="button secondary"
+                        onClick={() => action({ scenario: "FAILURE" }, true, true)}
+                      >
+                        Xác nhận thanh toán thất bại
+                      </button>
+                    </div>
+                  </>
                 )}
                 <p>
                   QR còn hiệu lực{" "}
@@ -1290,6 +1316,8 @@ function Payment({ id, admin }: { id: string; admin: boolean }) {
                   ? "Đang xác định kết quả tạo QR…"
                   : o.status === "REVIEW"
                     ? "Đơn cần tra soát. Hãy liên hệ quản trị viên."
+                    : o.status === "FAILED"
+                      ? "Thanh toán mô phỏng thất bại. Hãy quay lại thẻ để chọn gói và tạo đơn mới."
                     : "QR không còn được hiển thị. Bạn có thể kiểm tra lại thanh toán."}
               </Empty>
             )}
@@ -1325,7 +1353,7 @@ function Payment({ id, admin }: { id: string; admin: boolean }) {
               Bạn có thể đóng trang. Việc xác minh thanh toán và gia hạn vẫn
               được hệ thống tiếp tục xử lý.
             </div>
-            {admin && o.paymentMode === "mock" && o.status !== "PAID" && (
+            {admin && o.paymentMode === "mock" && !["PAID", "FAILED"].includes(o.status) && (
               <div className="dev-actions">
                 <h3>Kịch bản mô phỏng</h3>
                 {[

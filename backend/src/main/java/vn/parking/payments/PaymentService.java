@@ -413,9 +413,28 @@ public class PaymentService {
   }
 
   public Map<String, Object> simulate(UUID id, String scenario, Actor actor) {
-    Util.choice(scenario, "SUCCESS", "AMOUNT_MISMATCH", "LATE", "DUPLICATE");
+    Util.choice(scenario, "SUCCESS", "FAILURE", "AMOUNT_MISMATCH", "LATE", "DUPLICATE");
     get(id, actor);
     RenewalOrder o = db.get(RenewalOrder.class, id);
+    if (scenario.equals("FAILURE")) {
+      tx.executeWithoutResult(
+          s -> {
+            db.lock(Card.class, o.cardId);
+            RenewalOrder current = db.lock(RenewalOrder.class, id);
+            if (!current.status.equals("PENDING")) throw Problem.conflict("ORDER_NOT_PENDING");
+            current.status = "FAILED";
+            audit.record(
+                actor.id(),
+                "PAYMENT_SIMULATED_FAILURE",
+                "RENEWAL_ORDER",
+                id,
+                Util.map("status", "PENDING"),
+                Util.map("status", "FAILED"),
+                "Mô phỏng thanh toán thất bại");
+          });
+      return get(id, actor);
+    }
+    if (!o.status.equals("PENDING")) throw Problem.conflict("ORDER_NOT_PENDING");
     var p =
         new PaymentGateway.VerifiedPayment(
             "mock",

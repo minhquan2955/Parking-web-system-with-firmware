@@ -22,4 +22,11 @@ public class MockPaymentController {
   Object simulate(@PathVariable UUID id, @RequestBody Simulation r) {
     return service.simulate(id, r.scenario, Actor.current());
   }
+
+  @PostMapping("/api/v1/renewal-orders/{id}/simulate-payment")
+  Object simulateForOwner(@PathVariable UUID id, @RequestBody Simulation r) {
+    if (!"SUCCESS".equals(r.scenario) && !"FAILURE".equals(r.scenario))
+      throw new vn.parking.common.Problem(400, "INVALID_SCENARIO", "Kịch bản không hợp lệ");
+    return service.simulate(id, r.scenario, Actor.current());
+  }
 }
