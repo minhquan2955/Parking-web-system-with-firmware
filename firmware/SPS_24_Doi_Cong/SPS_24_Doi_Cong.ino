@@ -79,6 +79,7 @@ constexpr uint8_t EXIT_BUZZER_ACTIVE = LOW;
 constexpr int ENTRY_CLOSED_ANGLE = 0, ENTRY_OPEN_ANGLE = 90;
 constexpr int EXIT_CLOSED_ANGLE = 0, EXIT_OPEN_ANGLE = 90;
 constexpr uint32_t MIN_OPEN_MS = 3000, CLEAR_MS = 1500, CLOSING_MS = 1000;
+constexpr uint32_t IR_DEBOUNCE_MS = 50;
 constexpr uint32_t BEEP_MS = 200, RFID_POLL_MS = 50, SONAR_GAP_MS = 70;
 constexpr uint32_t ECHO_TIMEOUT_US = 30000, WIFI_RETRY_MS = 30000;
 constexpr float CAR_MIN_CM = 2.0f, CAR_MAX_CM = 15.0f;
@@ -133,6 +134,8 @@ class Gate {
 
   void begin() {
     pinMode(irPin_, INPUT);
+    obstacleState_ = obstacleCandidate_ = digitalRead(irPin_) == irActive_;
+    obstacleCandidateAt_ = millis();
     pinMode(buzzerPin_, OUTPUT);
     digitalWrite(buzzerPin_, !buzzerActive_);
     servo_.setPeriodHertz(50);
@@ -144,7 +147,7 @@ class Gate {
     if (!servo_.attached()) Serial.printf("[%s] ERROR: servo attach failed.\n", name_);
   }
 
-  bool obstacle() const { return digitalRead(irPin_) == irActive_; }
+  bool obstacle() const { return obstacleState_; }
   uint8_t state() const { return state_; }
 
   void scan() {
@@ -177,11 +180,12 @@ class Gate {
 
   void update() {
     const uint32_t now = millis();
+    updateObstacle(now);
     if (beeping_ && uint32_t(now - beepAt_) >= BEEP_MS) {
       digitalWrite(buzzerPin_, !buzzerActive_);
       beeping_ = false;
     }
-    const bool blocked = obstacle();
+    const bool blocked = obstacleState_;
     if (state_ == 1) {
       if (blocked) clearTiming_ = false;
       else {
@@ -206,6 +210,17 @@ class Gate {
   }
 
  private:
+  void updateObstacle(uint32_t now) {
+    const bool rawBlocked = digitalRead(irPin_) == irActive_;
+    if (rawBlocked != obstacleCandidate_) {
+      obstacleCandidate_ = rawBlocked;
+      obstacleCandidateAt_ = now;
+    } else if (obstacleState_ != obstacleCandidate_ &&
+               uint32_t(now - obstacleCandidateAt_) >= IR_DEBOUNCE_MS) {
+      obstacleState_ = obstacleCandidate_;
+    }
+  }
+
   void open(uint32_t now) {
     servo_.write(openAngle_);
     state_ = 1;
@@ -220,6 +235,8 @@ class Gate {
   int closedAngle_, openAngle_;
   uint8_t state_ = 0;
   bool clearTiming_ = false, beeping_ = false;
+  bool obstacleState_ = false, obstacleCandidate_ = false;
+  uint32_t obstacleCandidateAt_ = 0;
   uint32_t openedAt_ = 0, clearAt_ = 0, closingAt_ = 0, beepAt_ = 0;
   uint32_t minimumOpenMs_ = MIN_OPEN_MS;
 };
