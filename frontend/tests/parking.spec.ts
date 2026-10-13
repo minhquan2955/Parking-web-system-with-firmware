@@ -82,7 +82,7 @@ test("public registration, USER empty state, ADMIN assignment, payment, parking 
   await expect(
     page.getByRole("heading", { name: "Đã thanh toán — Đã gia hạn" }),
   ).toBeVisible();
-  // Simulator device API still runs independently of browser sessions.
+  // Register a test device through the device API independently of browser sessions.
   const boot = crypto.randomUUID();
   const headers = { "X-Device-Id": "ESP32-01", "X-Device-Key": env.DEVICE_KEY };
   const hb = await request.post("/api/v1/device/heartbeats", {
@@ -91,7 +91,7 @@ test("public registration, USER empty state, ADMIN assignment, payment, parking 
       bootId: boot,
       seq: 1,
       uptimeMs: 0,
-      firmwareVersion: "e2e-simulator",
+      firmwareVersion: "e2e-test",
       slots: ["S1", "S2", "S3"].map((slotId) => ({ slotId, state: "FREE" })),
     },
   });

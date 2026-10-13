@@ -5,7 +5,6 @@
 .tools/
 .runtime/
 **/__pycache__/
-**/.pio/
 *.log
 *.tsbuildinfo
 **/test-results/
