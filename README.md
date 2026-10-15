@@ -15,7 +15,13 @@ Hệ thống quản lý bãi đỗ xe thông minh gồm website cho người dù
 
 ### Mô hình phần cứng
 
-## Tính năng
+<table>
+  <tr>
+    <td align="center" valign="top"><strong>Parking lot</strong><br><img src="docs/parkingslots-model.png" alt="Mo hinh thuc te cua bai do" width="680"></td>
+  </tr>
+</table>
+
+### Tính năng
 
 - **Người dùng:** đăng ký, đăng nhập, xem thẻ, gia hạn và tra cứu lịch sử gửi xe.
 - **Quản trị viên:** quản lý người dùng và thẻ, theo dõi thanh toán, thiết bị, lượt quét và nhật ký quản trị.
