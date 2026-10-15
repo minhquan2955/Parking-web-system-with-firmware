@@ -3,6 +3,7 @@ package vn.parking;
 import static org.assertj.core.api.Assertions.*;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import vn.parking.common.Problem;
 import vn.parking.payments.PayosGateway;
@@ -21,11 +22,16 @@ class PayosSignatureTest {
     assertThat(PayosGateway.sign(data, key))
         .isEqualTo("412e915d2871504ed31be63c8f62a149a4410d34c4c42affc9006ef9917eaa03");
     var adapter =
-        new PayosGateway(json, "test-client", "test-api", key, "http://localhost:3000", "");
+        new PayosGateway(
+            json,
+            "test-client",
+            "test-api",
+            key,
+            "http://localhost:3000");
     var body = json.createObjectNode().set("data", data);
     ((com.fasterxml.jackson.databind.node.ObjectNode) body)
         .put("signature", PayosGateway.sign(data, key));
-    assertThat(adapter.verify(body).paidAt()).isNull();
+    assertThat(adapter.verify(body).paidAt()).isEqualTo(Instant.parse("2023-02-04T11:25:00Z"));
     ((com.fasterxml.jackson.databind.node.ObjectNode) data).put("amount", 1);
     assertThatThrownBy(() -> adapter.verify(body)).isInstanceOf(Problem.class);
   }

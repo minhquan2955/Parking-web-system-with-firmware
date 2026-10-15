@@ -20,7 +20,9 @@ import vn.parking.model.RenewalOrder;
 @Component
 @ConditionalOnProperty(name = "parking.payment-mode", havingValue = "payos")
 public class PayosGateway implements PaymentGateway {
-  private final String clientId, apiKey, checksum, publicUrl, timezone;
+  // payOS transactionDateTime may be timezone-less and represents Vietnam local time.
+  private static final ZoneOffset PAYOS_TRANSACTION_OFFSET = ZoneOffset.ofHours(7);
+  private final String clientId, apiKey, checksum, publicUrl;
   private final ObjectMapper json;
   private final HttpClient http =
       HttpClient.newBuilder()
@@ -33,18 +35,15 @@ public class PayosGateway implements PaymentGateway {
       @Value("${parking.payos-client-id}") String clientId,
       @Value("${parking.payos-api-key}") String apiKey,
       @Value("${parking.payos-checksum-key}") String checksum,
-      @Value("${parking.public-url}") String publicUrl,
-      @Value("${parking.payos-timezone}") String timezone) {
+      @Value("${parking.public-url}") String publicUrl) {
     if (clientId.isBlank() || apiKey.isBlank() || checksum.isBlank())
       throw new IllegalStateException(
           "payOS mode requires credentials; mock fallback is forbidden");
-    if (!timezone.isBlank()) ZoneId.of(timezone);
     this.json = json;
     this.clientId = clientId;
     this.apiKey = apiKey;
     this.checksum = checksum;
     this.publicUrl = publicUrl;
-    this.timezone = timezone;
   }
 
   public Link create(RenewalOrder o) {
@@ -85,7 +84,10 @@ public class PayosGateway implements PaymentGateway {
                 text(d, "id"),
                 text(t, "reference"),
                 amount(t),
-                text(t, "currency") != null ? text(t, "currency") : text(d, "currency"),
+                // The payment-link query response and its transactions omit currency.
+                // This integration only creates VND orders, and the signed link response
+                // has already been matched to this order code above.
+                o.currency,
                 time(text(t, "transactionDateTime")),
                 true,
                 Util.sha(canonical(t))));
@@ -189,15 +191,20 @@ public class PayosGateway implements PaymentGateway {
 
   private Instant time(String s) {
     if (s == null) return null;
+    String normalized = s.trim();
+    if (normalized.length() > 10 && normalized.charAt(10) == ' ')
+      normalized = normalized.substring(0, 10) + "T" + normalized.substring(11);
     try {
-      return Instant.parse(s);
+      return Instant.parse(normalized);
     } catch (Exception ignored) {
     }
-    if (timezone.isBlank()) return null;
     try {
-      return LocalDateTime.parse(s, DateTimeFormatter.ofPattern("uuuu-MM-dd HH:mm:ss"))
-          .atZone(ZoneId.of(timezone))
-          .toInstant();
+      return OffsetDateTime.parse(normalized, DateTimeFormatter.ISO_DATE_TIME).toInstant();
+    } catch (Exception ignored) {
+    }
+    try {
+      return LocalDateTime.parse(normalized, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+          .toInstant(PAYOS_TRANSACTION_OFFSET);
     } catch (Exception ignored) {
       return null;
     }
